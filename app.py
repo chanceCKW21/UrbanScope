@@ -9,16 +9,33 @@ from engine import RasterInput, load_image, classify_baseline, render_overlay, r
 import storage
 
 st.set_page_config(page_title='UrbanScope', page_icon='🛰️', layout='wide')
-st.markdown('''<style>.block-container{padding-top:1.6rem;max-width:1300px}.hero{padding:18px 24px;border-radius:15px;background:#10291f;color:#f5fbf6;margin-bottom:18px}.hero h1{margin:0;color:#f5fbf6}.hero p{color:#cde2d6}</style>''',unsafe_allow_html=True)
-st.markdown('<div class="hero"><h1>UrbanScope 🛰️</h1><p>Satellite imagery classification and geospatial land-cover analytics</p></div>',unsafe_allow_html=True)
-
+st.markdown("""<style>
+:root {color-scheme: dark}
+.stApp {background: radial-gradient(ellipse at 85% 0%,rgba(31,93,85,.20),transparent 43%), linear-gradient(145deg,#0b151b,#101821 60%,#0d161d);color:#e8f2f0}
+.block-container {padding-top:1.25rem;padding-bottom:4rem;max-width:1220px}
+[data-testid="stSidebar"] {background:linear-gradient(180deg,#14232c,#0d1921);border-right:1px solid #2b444a}
+[data-testid="stSidebar"] h2 {letter-spacing:.02em}
+.hero {padding:28px 30px;border-radius:18px;background:linear-gradient(110deg,#173b36,#18313f 67%,#173144);border:1px solid #41675f;margin-bottom:23px;box-shadow:0 12px 42px rgba(0,0,0,.15)}
+.hero h1 {margin:0;color:#f6fdf9;font-size:2.5rem;line-height:1.15;letter-spacing:-.035em}
+.hero p {color:#bfe0d5;margin:8px 0 0;font-size:1.02rem}
+.hero small {color:#8be0bf;font-weight:700;letter-spacing:.14em}
+[data-testid="stMetric"] {border:1px solid #315451;border-radius:14px;padding:15px 18px;background:#142a2d}
+[data-testid="stMetricValue"] {color:#a2f3c5}
+[data-testid="stTabs"] button {font-weight:600}
+[data-testid="stFileUploader"] {border-radius:12px}
+div.stButton>button[kind="primary"],div.stDownloadButton>button[kind="primary"] {background:#177b63;border:1px solid #58ae96;color:white}
+[data-testid="stAlert"] {border-radius:12px}
+h1,h2,h3 {letter-spacing:-.02em}
+</style>""", unsafe_allow_html=True)
+st.markdown('<div class="hero"><small>GEOSPATIAL INTELLIGENCE · SENIOR CAPSTONE</small><h1>URBANSCOPE <span style="color:#9ef0c5">◈</span></h1><p>Discover patterns in the landscape. Classify urban development and vegetation across satellite imagery.</p></div>',unsafe_allow_html=True)
 with st.sidebar:
     st.header('Analysis settings')
+    st.caption('01 / Configure classification')
     mode=st.radio('Target land cover',['Forest','Urban'])
     method=st.selectbox('Classification method',['Traditional (experimental RGB baseline)','Pretrained AI (experimental, requires model download)'])
     sensitivity=st.slider('Baseline sensitivity',0,100,50,disabled=not method.startswith('Traditional'))
     opacity=st.slider('Overlay opacity',0.15,0.90,0.55)
-    st.info('RGB baseline estimates are exploratory and not scientifically validated. Forest means visually tree-like cover; urban means visually built-up surfaces.')
+    st.caption('RGB results are exploratory. For stronger multispectral analysis, upload an ordered Landsat B1–B6 GeoTIFF.')
 
 tab_analysis,tab_history,tab_about=st.tabs(['Analyze imagery','Saved analyses','Project / limitations'])
 with tab_analysis:
@@ -69,6 +86,8 @@ with tab_analysis:
         except ImportError: st.error('Map mode requires folium, streamlit-folium, requests, and rasterio.')
         except Exception as exc: st.error(f'Map imagery request failed: {exc}')
     if raster is not None:
+        st.divider()
+        st.markdown('### Analysis results')
         rgb=raster.rgb
         if rgb.shape[0]*rgb.shape[1]>7_000_000:
             st.warning('Large image: processing a reduced preview; downsampled pixel-level classification and boundaries are approximate.')
@@ -100,11 +119,17 @@ with tab_analysis:
             c1.metric('Target coverage',f"{stats['coverage_percent']:.2f}%")
             c2.metric('Detected pixels',f"{stats['selected_pixels']:,}")
             c3.metric('Detected area',f"{stats['area_square_kilometers']:.4f} km²" if stats['area_square_kilometers'] is not None else 'Unknown (no geographic scale)')
-            orig64=base64.b64encode(png_bytes(rgb)).decode(); over64=base64.b64encode(png_bytes(overlay)).decode()
-            import streamlit.components.v1 as components
-            comparison=f'''<style>body{{margin:0;background:#111}}.compare{{position:relative;overflow:hidden;width:100%;aspect-ratio:{rgb.shape[1]}/{rgb.shape[0]}}}.compare img{{position:absolute;inset:0;width:100%;height:100%}}.cover{{position:absolute;inset:0;overflow:hidden;width:50%}}.cover img{{width:{rgb.shape[1]}px;max-width:none;height:100%}}input{{width:100%}}</style><div class="compare" id="cmp"><img src="data:image/png;base64,{orig64}"><div class="cover" id="top"><img id="topImage" src="data:image/png;base64,{over64}"></div></div><input type="range" min="0" max="100" value="50" aria-label="Comparison slider" oninput="document.getElementById('top').style.width=this.value+'%'"/><script>function resize(){{document.getElementById('topImage').style.width=document.getElementById('cmp').clientWidth+'px'}};window.addEventListener('resize',resize);resize();</script>'''
-            components.html(comparison,height=min(730,int(680*rgb.shape[0]/rgb.shape[1])+70),scrolling=False)
-            st.caption('Move the slider to reveal the classification overlay (left) and original imagery (right).')
+            st.subheader('Explore the classified landscape')
+            st.caption('Drag the reveal slider to compare the analysis (left) against original imagery (right).')
+            reveal = st.slider('Comparison reveal (%)', 0, 100, 50, key='comparison_reveal', help='0 = original image only; 100 = classified overlay only.')
+            # Native Streamlit slider is intentionally used here; it continues to work
+            # when browsers or hosted platforms restrict JavaScript in HTML iframes.
+            split = int(round(rgb.shape[1] * reveal / 100.0))
+            comparison_img = rgb.copy()
+            comparison_img[:, :split] = overlay[:, :split]
+            if 0 < split < rgb.shape[1]:
+                comparison_img[:, max(0,split-2):min(rgb.shape[1],split+2)] = [245, 249, 243]
+            st.image(comparison_img, caption=f'Classification overlay {reveal}% · Original image {100-reveal}%', use_container_width=True)
             a,b=st.columns(2)
             a.image(overlay,caption='Classification overlay',use_container_width=True)
             b.image((mask*255).astype('uint8'),caption='Binary classification mask',use_container_width=True)
