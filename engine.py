@@ -62,14 +62,35 @@ def classify_baseline(rgb: np.ndarray, mode: str, sensitivity: int = 50) -> np.n
     lab = cv2.cvtColor(rgb, cv2.COLOR_RGB2LAB)
     r, g, b = [rgb[:, :, i].astype(np.int16) for i in range(3)]
     exg = 2*g-r-b
-    # Greenness index reduces false positives from many blue surfaces.
-    green = (exg > 12 + (50-sensitivity)*0.38) & (hsv[:,:,0] >= 27) & (hsv[:,:,0] <= 95) & (hsv[:,:,1] > 34)
-    # Heuristic excludes strongly colored pixels, very dark shadows and highlights.
-    neutral = (hsv[:,:,1] < 92 + (sensitivity-50)*0.5) & (hsv[:,:,2] > 58) & (hsv[:,:,2] < 250)
+    # RGB imagery cannot reliably identify deciduous trees without leaves.
+    # Conservative green vegetation candidate: stronger chromatic evidence and
+    # neighborhood support limit false positives on small green rooftops.
+    if mode == "Forest":
+        exg_threshold = 20 + (50-sensitivity)*0.35
+        raw = ((exg > exg_threshold) & (g > r + 11) & (g > b + 9)
+               & (hsv[:, :, 0] >= 30) & (hsv[:, :, 0] <= 90)
+               & (hsv[:, :, 1] >= 44) & (hsv[:, :, 2] >= 35))
+        # Require predominantly green local surroundings, not isolated pixels.
+        window = 11
+        support = cv2.boxFilter(raw.astype(np.float32), -1, (window, window),
+                                normalize=True, borderType=cv2.BORDER_REFLECT)
+        raw &= (support >= 0.42)
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        clean = cv2.morphologyEx(raw.astype(np.uint8), cv2.MORPH_OPEN, kernel)
+        # Keep sufficiently large contiguous patches. Resolution-independent
+        # threshold is intentionally modest so trees remain visible in samples.
+        min_pixels = max(24, int(rgb.shape[0]*rgb.shape[1]*0.00004))
+        count, labels, components, _ = cv2.connectedComponentsWithStats(clean, 8)
+        result = np.zeros(clean.shape, dtype=bool)
+        for i in range(1, count):
+            if components[i, cv2.CC_STAT_AREA] >= min_pixels:
+                result[labels == i] = True
+        return result
+    # Urban RGB proxy: neutral-colored surfaces; may include bare soil/roads.
+    neutral = ((hsv[:, :, 1] < 92 + (sensitivity-50)*0.5)
+               & (hsv[:, :, 2] > 58) & (hsv[:, :, 2] < 250))
     not_green = exg < 19
-    urban = neutral & not_green & (lab[:,:,0] > 72)
-    # Remove tiny isolated detections; it is deliberately a baseline only.
-    raw = green if mode == "Forest" else urban
+    raw = neutral & not_green & (lab[:, :, 0] > 72)
     kernel = np.ones((3, 3), np.uint8)
     clean = cv2.morphologyEx(raw.astype(np.uint8), cv2.MORPH_OPEN, kernel)
     return clean.astype(bool)
