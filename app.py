@@ -32,10 +32,10 @@ with st.sidebar:
     st.header('Analysis settings')
     st.caption('01 / Configure classification')
     mode=st.radio('Target land cover',['Forest','Urban'])
-    method=st.selectbox('Classification method',['Traditional (experimental RGB baseline)','Pretrained AI (experimental, requires model download)'])
-    sensitivity=st.slider('Baseline sensitivity',0,100,50,disabled=not method.startswith('Traditional'))
+    method=st.selectbox('Classification method',['Traditional image analysis (RGB / Landsat)'])
+    sensitivity=st.slider('RGB detection sensitivity',0,100,50,help='Lower values produce a stricter, more conservative RGB mask. Landsat NDVI/NDBI uses fixed thresholds.')
     opacity=st.slider('Overlay opacity',0.15,0.90,0.55)
-    st.caption('RGB results are exploratory. For stronger multispectral analysis, upload an ordered Landsat B1–B6 GeoTIFF.')
+    st.caption('RGB classification is a visual estimate, especially unreliable for brown/leaf-off trees. Upload an ordered Landsat B1–B6 GeoTIFF for NDVI/NDBI analysis.')
 
 tab_analysis,tab_history,tab_about=st.tabs(['Analyze imagery','Saved analyses','Project / limitations'])
 with tab_analysis:
@@ -100,15 +100,12 @@ with tab_analysis:
                 raster.valid = cv2.resize(raster.valid.astype(np.uint8),(new_width,new_height),interpolation=cv2.INTER_NEAREST).astype(bool)
             raster.transform=raster.transform * raster.transform.scale(raster.rgb.shape[1]/new_width,raster.rgb.shape[0]/new_height) if raster.transform is not None else None
         try:
-            if raster.spectral is not None and method.startswith('Traditional'):
+            if raster.spectral is not None:
                 mask=classify_multispectral(raster.spectral,mode,raster.valid)
                 st.success('Multispectral mode: Landsat NDVI/NDBI threshold segmentation. No AI training needed.')
-            elif method.startswith('Traditional'):
-                mask=classify_baseline(rgb,mode,sensitivity)
-                st.info('RGB-only approximation: results are less reliable than multispectral NDVI/NDBI.')
             else:
-                from ai_model import classify_ai
-                with st.spinner('Loading pretrained model and classifying...'): mask=classify_ai(rgb,mode)
+                mask=classify_baseline(rgb,mode,sensitivity)
+                st.info('RGB-only estimate: color and neighborhood filtering. Leaf-off trees and roofs can still be misclassified; for stronger evidence, use a Landsat multispectral GeoTIFF.')
             overlay=render_overlay(rgb,mask,mode,opacity)
             stats=result_stats(mask,raster.transform,raster.crs)
             if raster.valid is not None:
@@ -160,4 +157,4 @@ with tab_history:
             path=storage.DATA/f'{selected}_overlay.png'
             if path.exists(): st.image(str(path),caption=f'Saved overlay: {selected}',use_container_width=True)
 with tab_about:
-    st.markdown('''**UrbanScope prototype**\n\n- Classical image processing is an exploratory RGB heuristic, not independently validated forest or urban classification.\n- The optional pretrained AI is a third-party model and may fail on imagery unlike its training data.\n- Measurements are emitted only when geographic metadata is available, and map imagery is subject to source resolution and licensing.\n- Aerial/satellite imagery often lacks original acquisition dates in image screenshots. No time-change claims are made.\n- Future research: evaluate precision, recall, F1 and IoU against manually annotated reference masks or a compatible land-cover dataset.\n''')
+    st.markdown('''**UrbanScope prototype**\n\n- Classical image processing is an exploratory RGB heuristic, not independently validated forest or urban classification.\n- Pretrained AI is not included in this public 24-hour demonstration build because its optional PyTorch dependencies were not installed on the deployment server.\n- Measurements are emitted only when geographic metadata is available, and map imagery is subject to source resolution and licensing.\n- Aerial/satellite imagery often lacks original acquisition dates in image screenshots. No time-change claims are made.\n- Future research: evaluate precision, recall, F1 and IoU against manually annotated reference masks or a compatible land-cover dataset.\n''')
