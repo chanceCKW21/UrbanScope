@@ -1,56 +1,57 @@
-# UrbanScope — senior capstone starter application
-
-UrbanScope estimates built-up surfaces or vegetation from (a) Landsat 8/9 multispectral stacks with bands B1–B6 in order using NDVI/NDBI, (b) ordinary RGB aerial/satellite images using experimental color heuristics, or (c) map-selected RGB imagery. It includes geospatial uploads, class overlays, before/after comparison, metrics, exports, and SQLite-backed local history.
-
-## Running on Windows / macOS / Linux
-
-1. Install Python 3.11 or 3.12.
-2. Open a terminal in this folder.
-3. Create an environment: `python -m venv .venv`
-4. Activate: Windows PowerShell: `.venv\Scripts\Activate.ps1`; macOS/Linux: `source .venv/bin/activate`
-5. Install: `pip install -r requirements.txt`
-6. Run: `streamlit run app.py`
-7. Open the URL shown in the terminal (normally `http://localhost:8501`).
-
-Optional AI: `pip install -r requirements-ai.txt`. The AI downloads a third-party model on first use and has not yet been benchmarked for American cities. Its exact labels and inference behavior require local validation.
-
-## What works in this prototype
-
-- Upload JPG/PNG, RGB GeoTIFF, or Landsat 8/9 GeoTIFF stacks with B1–B6 ordered
-- Landsat workflow: B4 red, B5 near infrared, B6 short-wave infrared; NDVI vegetation or NDBI built-up estimation; morphology
-- Export detected polygon regions as georeferenced GeoJSON where CRS/transform are present
-- Experimental RGB-only Forest / Urban classification
-- Optional experimental pretrained segmentation model adapter
-- Before/after drag slider, overlay, mask, summary and bar chart
-- Correctly distinguishes pixel percentage from measured area
-- Area measurements for referenced rasters (projected or north-up WGS84 geographic)
-- Map selection with a web imagery endpoint (requires internet and compliance with provider terms)
-- Download overlay PNG, binary mask PNG, CSV and JSON results
-- Locally persist results in SQLite and image files
-
-## Important limitations
-
-This is an early prototype, **not a validated land-cover model**. Aerial RGB photographs do not automatically indicate *official* forest boundaries or urban jurisdiction. Pixel counts are meaningful as proportions, but measurements in square kilometers require real geospatial metadata; uploading an arbitrary screenshot does not provide scale. Third-party map imagery may have access, rate, licensing, or acquisition-date constraints. Unless the Landsat checkbox is selected, GeoTIFF bands 1,2,3 are treated as RGB. Landsat mode **requires an ordered B1–B6 stack**; a single-band file, rearranged stack, or different sensor cannot be treated as the same sensor. NDVI detects vegetation, not forests specifically; NDBI can confuse bare soil with built-up areas. Thresholds are exploratory and need ground-truth validation. The numeric indices are meaningful for bands with compatible reflectance units/scaling; inspect raster metadata. Map-selected coverage is an estimate from the provider's visual basemap and should not be used as authoritative GIS data. Model weights, licensing and model generalization should be verified before distribution.
-
-## Test
-
-`python -m unittest discover -s tests -v`
-
-## Next build targets
-
-1. Validate and refine map-selected export and AI inference in a live Streamlit environment.
-2. Assemble 15–30 diverse test scenes with ground-truth pixel masks.
-3. Evaluate precision, recall, IoU and false positives for each class.
-4. Add model confidence visualization and provider attribution.
-5. Improve export with georeferenced GeoTIFF masks and better image band controls.
-6. Write Problem Reports, screenshots, demo script, user manual and final presentation.
-
-## Using the prior Landsat project code
-
-1. Choose **Upload image** in UrbanScope.
-2. Select a single GeoTIFF containing Landsat 8 or 9 reflectance bands B1, B2, B3, B4, B5, B6 in **that order**.
-3. Enable the **ordered Landsat 8/9 bands** checkbox (auto-enabled when filename begins LC08/LC09).
-4. Keep **Traditional** selected, and choose **Urban** (NDBI > 0.05 and NDVI < 0.2) or **Forest** (NDVI > 0.35; vegetation proxy).
-5. Compare original/overlay, review measured coverage, and download **GeoJSON**, PNG or metrics.
-
-Not every `.tif` is a Landsat stack. If the file is a normal RGB image, **disable** Landsat mode.
+UrbanScope
+Satellite imagery classification and land-cover visualization | Senior Computer Science Capstone
+UrbanScope is a browser-based geospatial analysis application that highlights likely vegetation-rich or built-up surfaces in aerial and satellite imagery. Users can upload their own images or choose a map area, inspect a classification overlay, and export results.
+> **Research prototype:** Classifications are exploratory and have not been validated for real-world planning or environmental decisions. UrbanScope detects visual/spectral proxies, not official forest boundaries or municipal urban boundaries.
+Features
+Classify Forest (vegetation proxy) or Urban (built-up proxy).
+Upload JPG, PNG, TIFF, and GeoTIFF imagery.
+Choose a geographic area on an interactive map using Esri World Imagery.
+Analyze compatible Landsat 8/9 multispectral GeoTIFFs with six ordered bands (B1–B6).
+Explore original and classified imagery using a reveal slider, overlay and binary mask.
+View percentage coverage, detected pixel counts and geographic area when valid georeferencing permits.
+Download overlay and mask PNG files, summary CSV/JSON, and GeoJSON polygons for georeferenced inputs.
+Save and view analyses in a local SQLite history (temporary on many cloud deployments).
+How to use the online application
+Open the deployed UrbanScope website (add the public application URL here once verified).
+Select Forest or Urban from the sidebar.
+Choose Upload image or Choose location on map.
+Upload an image, or navigate the map and choose Use current map area.
+Review the classification statistics and move Comparison reveal (%) to compare the original and overlay.
+Download any needed output files.
+Landsat-specific analysis
+For a GeoTIFF containing Landsat 8/9 reflectance bands B1–B6 in that exact order, enable the Landsat checkbox. UrbanScope computes:
+NDVI = (NIR − Red) / (NIR + Red) to find vegetation-rich areas (default threshold > 0.35).
+NDBI = (SWIR1 − NIR) / (SWIR1 + NIR) to estimate built-up surfaces (default NDBI > 0.05 and NDVI < 0.2).
+The software uses B4 (red), B5 (near infrared), and B6 (shortwave infrared). Do not enable Landsat mode for an ordinary three-band RGB GeoTIFF or an incorrectly ordered image. Spectral thresholds assume suitable reflectance scaling; sensor products and metadata should be checked first.
+Technical implementation
+Component	Technology
+Web interface	Streamlit
+Processing and morphology	NumPy and OpenCV
+Raster and geospatial processing	Rasterio and PyProj
+Interactive mapping	Folium and Streamlit-Folium
+Display and exports	Pillow, Pandas, Streamlit
+Local analysis history	SQLite
+Code overview: `app.py` handles the UI and map interaction; `engine.py` implements classification and statistics; `storage.py` manages local saved analyses; `requirements.txt` lists dependencies.
+Run locally (optional)
+The public website requires no coding tools or local installation. Developers may run the source with Python 3.11 or 3.12:
+```bash
+python -m pip install -r requirements.txt
+python -m streamlit run app.py
+```
+Known limitations
+RGB-only analysis is a heuristic; green-painted surfaces can be confused with vegetation, and brown/leaf-off woodland is frequently missed.
+NDVI responds to vegetation, including grass and crops, not only forests. NDBI can respond to bare soil and other nonurban materials.
+Measurements require valid geographic scale; arbitrary JPG/PNG screenshots do not provide authoritative area measurements.
+Map-selected imagery depends on an external provider and its licensing, image dates, resolution and availability.
+Cloud-based saved analyses may be lost on restart or redeployment; download exports for durable copies.
+No pretrained AI model is included in the current public release.
+Results are not independently accuracy-benchmarked or suitable as authoritative land-cover maps.
+Capstone submission
+The application source is in this repository. Final academic submission documents may be placed in `docs/`:
+Presentation (PowerPoint)
+User manual (PDF)
+Software Problem Report (PDF)
+Future enhancements
+Validated semantic segmentation, manually corrected labels, time-series change detection, durable cloud history and reference-data accuracy evaluation.
+Source imagery and attribution
+Map imagery is supplied through Esri World Imagery and underlying imagery providers; applicable attribution and terms must be observed. Uploaded imagery remains subject to its own source terms.
